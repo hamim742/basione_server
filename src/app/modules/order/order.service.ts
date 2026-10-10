@@ -1148,6 +1148,231 @@ const trackOrder = async (contactInfo: string) => {
   return attachReviewInfo(order);
 };
 
+const getAllCustomerOrders = async (
+  page: number = 1,
+  limit: number = 100,
+  skip: number = 0,
+  searchTerm?: string,
+  filter: {
+    status?: string;
+    paymentStatus?: string;
+    userType?: string;
+  } = {},
+) => {
+  const andConditions: any[] = [];
+
+  if (filter.status) {
+    andConditions.push({ status: filter.status });
+  }
+
+  if (filter.paymentStatus) {
+    andConditions.push({ paymentStatus: filter.paymentStatus });
+  }
+
+  if (filter.userType === "guest") {
+    andConditions.push({ isGuest: true });
+  } else if (filter.userType === "registered") {
+    andConditions.push({ isGuest: false });
+  }
+
+  if (searchTerm && searchTerm.trim()) {
+    const term = searchTerm.trim();
+    andConditions.push({
+      OR: [
+        { trackingNumber: { contains: term, mode: "insensitive" } },
+        { guestName: { contains: term, mode: "insensitive" } },
+        { guestEmail: { contains: term, mode: "insensitive" } },
+        { guestPhone: { contains: term, mode: "insensitive" } },
+        { user: { name: { contains: term, mode: "insensitive" } } },
+        { user: { email: { contains: term, mode: "insensitive" } } },
+        { user: { phone: { contains: term, mode: "insensitive" } } },
+        { addresses: { name: { contains: term, mode: "insensitive" } } },
+        { addresses: { email: { contains: term, mode: "insensitive" } } },
+        { addresses: { phone: { contains: term, mode: "insensitive" } } },
+        { addresses: { city: { contains: term, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  const where = andConditions.length > 0 ? { AND: andConditions } : {};
+
+  const orders: any[] = await prisma.order.findMany({
+    where,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          image: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+      addresses: true,
+      payment: {
+        select: {
+          id: true,
+          transactionId: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+      banner: {
+        select: {
+          id: true,
+          name: true,
+          occasion: true,
+          price: true,
+          imageUrl: true,
+          width: true,
+          height: true,
+        },
+      },
+      items: {
+        include: {
+          banner: {
+            select: {
+              id: true,
+              name: true,
+              occasion: true,
+              price: true,
+              imageUrl: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit > 0 ? limit : undefined,
+    skip: limit > 0 ? skip : undefined,
+  });
+
+  const [total, totalGuestOrders, totalRegisteredOrders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.count({ where: { ...where, isGuest: true } }),
+    prisma.order.count({ where: { ...where, isGuest: false } }),
+  ]);
+
+  const formattedOrders = orders.map((order: any) => {
+    const customerName =
+      order.addresses?.name ||
+      order.user?.name ||
+      order.guestName ||
+      "N/A";
+    const customerEmail =
+      order.addresses?.email ||
+      order.user?.email ||
+      order.guestEmail ||
+      "N/A";
+    const customerPhone =
+      order.addresses?.phone ||
+      order.user?.phone ||
+      order.guestPhone ||
+      "N/A";
+
+    return {
+      orderId: order.id,
+      trackingNumber: order.trackingNumber || null,
+      orderStatus: order.status,
+      paymentStatus: order.paymentStatus,
+      isGuest: order.isGuest,
+      customerType: order.isGuest
+        ? "guest"
+        : order.userId
+        ? "registered"
+        : "guest",
+      customer: {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        customerType: order.isGuest ? "guest" : "registered",
+        isRegistered: !order.isGuest && !!order.userId,
+        registeredUserId: order.userId || null,
+        address: order.addresses
+          ? {
+              name: order.addresses.name,
+              email: order.addresses.email,
+              phone: order.addresses.phone,
+              street: order.addresses.street,
+              houseNumber: order.addresses.houseNumber,
+              city: order.addresses.city,
+              zipCode: order.addresses.zipCode,
+              country: order.addresses.country || "NL",
+              companyName: order.addresses.companyName || null,
+              extraAddress: order.addresses.address || null,
+            }
+          : null,
+      },
+      orderSummary: {
+        quantity: order.quantity,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        eyeletsFee: order.eyeletsFee,
+        discountAmount: order.discountAmount,
+        couponCode: order.couponCode,
+        totalAmount: order.total,
+        currency: "EUR",
+        deliveryType: order.deliveryType,
+        deliveryMethod: order.deliveryMethod,
+        deliveryTime: order.deliveryTime,
+        estimatedDeliveryDate: order.estimatedDeliveryDate,
+      },
+      payment: order.payment
+        ? {
+            id: order.payment.id,
+            transactionId: order.payment.transactionId,
+            amount: order.payment.amount,
+            status: order.payment.status,
+            createdAt: order.payment.createdAt,
+          }
+        : null,
+      itemsCount: order.items?.length || (order.bannerId ? 1 : 0),
+      items:
+        order.items?.length > 0
+          ? order.items.map((item: any) => ({
+              id: item.id,
+              bannerId: item.bannerId,
+              bannerName: item.banner?.name,
+              quantity: item.quantity,
+              price: item.banner?.price,
+              imageUrl: item.banner?.imageUrl,
+            }))
+          : order.banner
+          ? [
+              {
+                id: order.banner.id,
+                bannerId: order.banner.id,
+                bannerName: order.banner.name,
+                quantity: order.quantity,
+                price: order.banner.price,
+                imageUrl: order.banner.imageUrl,
+              },
+            ]
+          : [],
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
+  });
+
+  return {
+    orders: formattedOrders,
+    metaData: {
+      total,
+      totalGuestOrders,
+      totalRegisteredOrders,
+      page: limit > 0 ? page : 1,
+      limit: limit > 0 ? limit : total,
+      totalPages: limit > 0 ? Math.ceil(total / limit) : 1,
+    },
+  };
+};
+
 export const orderService = {
   createOrder,
   checkOut,
@@ -1157,4 +1382,5 @@ export const orderService = {
   cancledOrder,
   getMyDesigns,
   trackOrder,
+  getAllCustomerOrders,
 };

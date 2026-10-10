@@ -144,6 +144,42 @@ const trackOrder = async (req: Request, res: Response) => {
   });
 };
 
+const getAllCustomerOrders = async (req: Request, res: Response) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit =
+    req.query.limit !== undefined ? Math.max(0, Number(req.query.limit)) : 100;
+  const skip = limit > 0 ? (page - 1) * limit : 0;
+  const searchTerm = req.query.searchTerm as string;
+
+  const filter = {
+    status: req.query.status as string,
+    paymentStatus: req.query.paymentStatus as string,
+    userType:
+      (req.query.userType as string) ||
+      (req.query.isGuest === "true"
+        ? "guest"
+        : req.query.isGuest === "false"
+        ? "registered"
+        : undefined),
+  };
+
+  const result = await orderService.getAllCustomerOrders(
+    page,
+    limit,
+    skip,
+    searchTerm,
+    filter,
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Alle klantbestellingen succesvol opgehaald",
+    data: result.orders,
+    metaData: result.metaData,
+  });
+};
+
 export const orderController = {
   createOrder,
   checkOut,
@@ -153,4 +189,5 @@ export const orderController = {
   cancledOrder,
   getMyDesigns,
   trackOrder,
+  getAllCustomerOrders,
 };
