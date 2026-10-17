@@ -196,30 +196,47 @@ const totalOrder = async (
     andConditions.push(cleanFilter);
   }
 
-  if (searchTerm) {
-    const isObjectId = /^[a-fA-F0-9]{24}$/.test(searchTerm);
+  if (searchTerm && searchTerm.trim()) {
+    const term = searchTerm.trim();
+    const cleanTerm = term.replace(/^#/, "").trim();
+    const isObjectId = /^[a-fA-F0-9]{24}$/.test(term);
 
-    const [matchedUsers, matchedBanners] = await Promise.all([
+    const [matchedUsers, matchedAddresses, matchedBanners] = await Promise.all([
       prisma.user.findMany({
         where: {
           OR: [
-            { name: { contains: searchTerm, mode: "insensitive" } },
-            { email: { contains: searchTerm, mode: "insensitive" } },
-            { phone: { contains: searchTerm, mode: "insensitive" } },
+            { name: { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+            { phone: { contains: term, mode: "insensitive" } },
           ],
         },
         select: { id: true },
       }),
+      prisma.address.findMany({
+        where: {
+          OR: [
+            { name: { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+            { phone: { contains: term, mode: "insensitive" } },
+            { companyName: { contains: term, mode: "insensitive" } },
+            { street: { contains: term, mode: "insensitive" } },
+            { city: { contains: term, mode: "insensitive" } },
+            { zipCode: { contains: term, mode: "insensitive" } },
+          ],
+        },
+        select: { orderId: true },
+      }),
       prisma.banner.findMany({
         where: {
           OR: [
-            { headline: { contains: searchTerm, mode: "insensitive" } },
-            { occasion: { contains: searchTerm, mode: "insensitive" } },
-            { name: { contains: searchTerm, mode: "insensitive" } },
-            { description: { contains: searchTerm, mode: "insensitive" } },
-            { style: { contains: searchTerm, mode: "insensitive" } },
-            { sku: { contains: searchTerm, mode: "insensitive" } },
-            { slug: { contains: searchTerm, mode: "insensitive" } },
+            { headline: { contains: term, mode: "insensitive" } },
+            { occasion: { contains: term, mode: "insensitive" } },
+            { name: { contains: term, mode: "insensitive" } },
+            { description: { contains: term, mode: "insensitive" } },
+            { style: { contains: term, mode: "insensitive" } },
+            { sku: { contains: term, mode: "insensitive" } },
+            { slug: { contains: term, mode: "insensitive" } },
+            { designNumber: { contains: term, mode: "insensitive" } },
           ],
         },
         select: { id: true },
@@ -227,16 +244,36 @@ const totalOrder = async (
     ]);
 
     const userIds = matchedUsers.map((u) => u.id);
+    const addressOrderIds = matchedAddresses
+      .map((a) => a.orderId)
+      .filter((id): id is string => Boolean(id));
     const bannerIds = matchedBanners.map((b) => b.id);
 
-    const orConditions: any[] = [];
+    const orConditions: any[] = [
+      { trackingNumber: { contains: term, mode: "insensitive" } },
+      { guestName: { contains: term, mode: "insensitive" } },
+      { guestEmail: { contains: term, mode: "insensitive" } },
+      { guestPhone: { contains: term, mode: "insensitive" } },
+    ];
+
+    if (cleanTerm && cleanTerm !== term) {
+      orConditions.push({
+        trackingNumber: { contains: cleanTerm, mode: "insensitive" },
+      });
+    }
 
     if (isObjectId) {
       orConditions.push(
-        { id: searchTerm },
-        { userId: searchTerm },
-        { bannerId: searchTerm },
+        { id: term },
+        { userId: term },
+        { bannerId: term },
       );
+    }
+
+    if (addressOrderIds.length > 0) {
+      orConditions.push({
+        id: { in: addressOrderIds },
+      });
     }
 
     if (userIds.length > 0) {
@@ -246,21 +283,10 @@ const totalOrder = async (
     }
 
     if (bannerIds.length > 0) {
-      orConditions.push({
-        bannerId: { in: bannerIds },
-      });
-    }
-
-    if (orConditions.length === 0) {
-      return {
-        orders: [],
-        metaData: {
-          total: 0,
-          page,
-          limit,
-          totalPages: 0,
-        },
-      };
+      orConditions.push(
+        { bannerId: { in: bannerIds } },
+        { items: { some: { bannerId: { in: bannerIds } } } },
+      );
     }
 
     andConditions.push({
