@@ -65,17 +65,34 @@ const getWatermarkSvg = ({
   widthCm?: number;
   heightCm?: number;
 }) => {
-  const physicalHeightCm = heightCm || 100;
-  // 5mm = 0.5cm. Calculate corresponding pixel size.
-  // fontSize = (0.5 / physicalHeightCm) * height
-  const calculatedFontSize = Math.round((0.5 / physicalHeightCm) * height);
-  const fontSize = Math.max(12, calculatedFontSize);
+  // Determine pixel density (pxPerCm)
+  let pxPerCm = 0;
+  if (widthCm && widthCm > 0) {
+    pxPerCm = width / widthCm;
+  } else if (heightCm && heightCm > 0) {
+    pxPerCm = height / heightCm;
+  } else {
+    // Fallback: assume standard 120cm banner width
+    pxPerCm = width / 120;
+  }
 
-  const paddingX = Math.round(fontSize * 0.55);
-  const paddingY = Math.round(fontSize * 0.35);
-  const boxWidth = Math.round(text.length * fontSize * 0.64 + paddingX * 2);
-  const boxHeight = Math.round(fontSize + paddingY * 2);
-  const radius = Math.round(boxHeight * 0.18);
+  // Client requirement:
+  // 1. "approximately 2 cm wide"
+  // 2. "same size and position in every design"
+  // 3. "small and subtle in every design"
+  const targetWidthCm = 2.0; // 2 cm wide
+  const targetHeightCm = 0.55; // 5.5 mm height
+
+  const boxWidth = Math.max(24, Math.round(targetWidthCm * pxPerCm));
+  const boxHeight = Math.max(10, Math.round(targetHeightCm * pxPerCm));
+  const radius = Math.round(boxHeight * 0.2);
+
+  // Proportional font calculation to fit inside the 2 cm box comfortably
+  const textLength = Math.max(1, text.length);
+  const maxFontFromWidth = (boxWidth * 0.86) / (textLength * 0.62);
+  const maxFontFromHeight = boxHeight * 0.68;
+  const fontSize = Math.max(8, Math.floor(Math.min(maxFontFromWidth, maxFontFromHeight)));
+  const textY = Math.round(boxHeight / 2 + fontSize * 0.35);
 
   return Buffer.from(`
     <svg width="${boxWidth}" height="${boxHeight}" viewBox="0 0 ${boxWidth} ${boxHeight}" xmlns="http://www.w3.org/2000/svg">
@@ -89,13 +106,14 @@ const getWatermarkSvg = ({
             font-family: 'Roboto-Bold', Arial, Helvetica, sans-serif;
             font-size: ${fontSize}px;
             font-weight: 700;
-            fill: #0F172A;
+            fill: #1E293B;
           }
         </style>
       </defs>
-      <rect x="0" y="0" width="${boxWidth}" height="${boxHeight}" rx="${radius}" fill="rgba(255,255,255,0.86)"/>
-      <rect x="1" y="1" width="${boxWidth - 2}" height="${boxHeight - 2}" rx="${radius}" fill="none" stroke="rgba(15,23,42,0.35)" stroke-width="2"/>
-      <text x="${boxWidth / 2}" y="${Math.round(boxHeight / 2 + fontSize * 0.35)}" text-anchor="middle" class="watermark-text">${escapeSvgText(text)}</text>
+      <!-- Clean, subtle background without harsh borders -->
+      <rect x="0" y="0" width="${boxWidth}" height="${boxHeight}" rx="${radius}" fill="rgba(255,255,255,0.85)"/>
+      <rect x="0.5" y="0.5" width="${boxWidth - 1}" height="${boxHeight - 1}" rx="${radius}" fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+      <text x="${boxWidth / 2}" y="${textY}" text-anchor="middle" class="watermark-text">${escapeSvgText(text)}</text>
     </svg>
   `);
 };
@@ -146,25 +164,32 @@ export const applyDesignNumberToBanner = async ({
   });
 
   const watermarkMetadata = await sharp(watermark).metadata();
-  const physicalHeightCm = heightCm || 100;
-  // Approximately 8mm margin
-  const margin = Math.max(
-    10,
-    Math.round((0.8 / physicalHeightCm) * metadata.height),
-  );
+  const watermarkWidth = Number(watermarkMetadata.width || 0);
+  const watermarkHeight = Number(watermarkMetadata.height || 0);
+
+  // Determine pixel density (pxPerCm) for margin
+  let pxPerCm = 0;
+  if (widthCm && widthCm > 0) {
+    pxPerCm = metadata.width / widthCm;
+  } else if (heightCm && heightCm > 0) {
+    pxPerCm = metadata.height / heightCm;
+  } else {
+    pxPerCm = metadata.width / 120;
+  }
+
+  // Client requirement: "placed as far as possible in the bottom-right corner"
+  // Approximately 2.5 mm margin from the bottom and right edges
+  const margin = Math.max(2, Math.round(0.25 * pxPerCm));
+
+  const left = Math.max(0, metadata.width - watermarkWidth - margin);
+  const top = Math.max(0, metadata.height - watermarkHeight - margin);
 
   const finalImageBuffer = await image
     .composite([
       {
         input: watermark,
-        left: Math.max(
-          margin,
-          metadata.width - Number(watermarkMetadata.width || 0) - margin,
-        ),
-        top: Math.max(
-          margin,
-          metadata.height - Number(watermarkMetadata.height || 0) - margin,
-        ),
+        left,
+        top,
       },
     ])
     .png()
