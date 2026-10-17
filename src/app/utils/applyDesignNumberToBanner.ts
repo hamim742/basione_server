@@ -177,12 +177,13 @@ export const applyDesignNumberToBanner = async ({
     pxPerCm = metadata.width / 120;
   }
 
-  // Client requirement: "placed as far as possible in the bottom-right corner"
-  // Approximately 2.5 mm margin from the bottom and right edges
-  const margin = Math.max(2, Math.round(0.25 * pxPerCm));
+  // Client requirement: "The number can be placed right at the bottom edge, as close to the corner as possible."
+  // Right at the bottom edge (~1mm margin) to completely avoid the grommet punch area (which is ~15-20mm inset)
+  const marginX = Math.max(1, Math.round(0.15 * pxPerCm)); // ~1.5mm from right edge
+  const marginY = Math.max(1, Math.round(0.10 * pxPerCm)); // ~1.0mm from bottom edge (right at the edge)
 
-  const left = Math.max(0, metadata.width - watermarkWidth - margin);
-  const top = Math.max(0, metadata.height - watermarkHeight - margin);
+  const left = Math.max(0, metadata.width - watermarkWidth - marginX);
+  const top = Math.max(0, metadata.height - watermarkHeight - marginY);
 
   const finalImageBuffer = await image
     .composite([
