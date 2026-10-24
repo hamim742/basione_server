@@ -44,17 +44,34 @@ export const generateBannerPrintPdf = async ({
   const pageWidthPt = widthPt + bleedPt * 2;
   const pageHeightPt = heightPt + bleedPt * 2;
 
-  const imageSource = banner.originalImageUrl || banner.imageUrl;
-  if (!imageSource) {
+  const primarySource = banner.originalImageUrl || banner.imageUrl;
+  if (!primarySource) {
     throw new AppError("Geen afbeeldingsbron gevonden voor deze banner", 400);
   }
 
-  // Fetch the highest resolution image available
-  const response = await axios.get(imageSource, {
-    responseType: "arraybuffer",
-    timeout: 45000,
-  });
-  const imageBuffer = Buffer.from(response.data);
+  // Fetch the highest resolution image available with fallback
+  let imageBuffer: Buffer;
+  try {
+    const response = await axios.get(primarySource, {
+      responseType: "arraybuffer",
+      timeout: 45000,
+    });
+    imageBuffer = Buffer.from(response.data);
+  } catch (primaryErr: any) {
+    if (banner.imageUrl && banner.imageUrl !== primarySource) {
+      console.warn(
+        `Failed to fetch primary image ${primarySource}, trying fallback ${banner.imageUrl}:`,
+        primaryErr?.message,
+      );
+      const fallbackResponse = await axios.get(banner.imageUrl, {
+        responseType: "arraybuffer",
+        timeout: 45000,
+      });
+      imageBuffer = Buffer.from(fallbackResponse.data);
+    } else {
+      throw primaryErr;
+    }
+  }
 
   return new Promise<Buffer>((resolve, reject) => {
     try {

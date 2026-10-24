@@ -238,6 +238,9 @@ const mapBannerDesign = (banner: any) => ({
   size: banner.sizeLabel || banner.sizeType,
   sizeType: banner.sizeType,
   canvasJson: banner.canvasJson ?? banner.canvasJSON ?? null,
+  canvasJSON: banner.canvasJSON ?? banner.canvasJson ?? null,
+  eyeletType: banner.eyeletType || null,
+  material: banner.material || null,
 });
 
 const shouldMarkDesignAsOrdered = (banner: any, payload: CreateOrderPayload) => {
@@ -936,6 +939,9 @@ const getMyDesigns = async (
       lifecycleStatus: true,
       orderedAt: true,
       orderId: true,
+      canvasJSON: true,
+      eyeletType: true,
+      material: true,
     },
     orderBy: {
       createdAt: "desc",

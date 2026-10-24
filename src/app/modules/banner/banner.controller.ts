@@ -14,26 +14,61 @@ const downloadImage = catchAsync(async (req: Request, res: Response) => {
     throw new AppError("Afbeelding URL is verplicht", httpStatus.BAD_REQUEST);
   }
 
-  // Fetch the image as a stream
-  const response = await axios({
-    method: "GET",
-    url: url as string,
-    responseType: "stream",
-  });
+  const rawUrl = String(Array.isArray(url) ? url[0] : url || "");
+  const targetUrl = rawUrl.trim();
+  const rawFilename = Array.isArray(filename) ? filename[0] : filename;
+  const cleanFilename =
+    typeof rawFilename === "string" ? rawFilename : "ontwerp.png";
 
-  // Set Content-Disposition to force attachment download
-  const cleanFilename = (filename as string) || "ontwerp.png";
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(cleanFilename)}"`
-  );
+  try {
+    // Fetch the image as a stream with timeout & follow redirects
+    const response = await axios({
+      method: "GET",
+      url: targetUrl,
+      responseType: "stream",
+      timeout: 30000,
+      maxRedirects: 5,
+    });
 
-  const contentType = response.headers["content-type"];
-  if (contentType) {
-    res.setHeader("Content-Type", contentType);
+    // Set Content-Disposition to force attachment download
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(cleanFilename)}"`,
+    );
+
+    const contentType = response.headers["content-type"];
+    if (contentType) {
+      res.setHeader("Content-Type", contentType);
+    }
+
+    response.data.on("error", (streamErr: any) => {
+      console.error("Stream error in downloadImage:", streamErr?.message);
+      if (!res.headersSent) {
+        res.redirect(targetUrl);
+      }
+    });
+
+    response.data.pipe(res);
+  } catch (error: any) {
+    console.error(
+      `Failed to stream download for ${targetUrl}:`,
+      error?.message,
+    );
+
+    // If server stream proxy encounters any error (e.g. PHP/external outage, network blip),
+    // redirect browser directly to the target URL so user can still download/open it
+    if (
+      targetUrl.startsWith("http://") ||
+      targetUrl.startsWith("https://")
+    ) {
+      return res.redirect(targetUrl);
+    }
+
+    throw new AppError(
+      `Kan bestand niet downloaden: ${error.message}`,
+      httpStatus.BAD_GATEWAY,
+    );
   }
-
-  response.data.pipe(res);
 });
 
 const getBannerPrintPdf = catchAsync(async (req: Request, res: Response) => {
