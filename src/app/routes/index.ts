@@ -22,6 +22,8 @@ import { wishlistRoutes } from "../modules/wishlist/wishlist.routes";
 import { couponRoutes } from "../modules/coupon/coupon.routes";
 import { designRequestRoutes } from "../modules/designRequest/designRequest.routes";
 import { pricingSettingRoutes } from "../modules/pricingSetting/pricingSetting.routes";
+import { partyCategoryRoutes } from "../modules/partyCategory/partyCategory.routes";
+import { partyProductRoutes } from "../modules/partyProduct/partyProduct.routes";
 
 export const router = Router();
 
@@ -118,6 +120,14 @@ const routes = [
   {
     path: "/pricing-settings",
     route: pricingSettingRoutes,
+  },
+  {
+    path: "/party-category",
+    route: partyCategoryRoutes,
+  },
+  {
+    path: "/party-product",
+    route: partyProductRoutes,
   },
 ];
 

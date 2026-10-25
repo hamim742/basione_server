@@ -766,5 +766,56 @@ model DesignRequest {
   updatedAt    DateTime @updatedAt
 }
 
+model PartyCategory {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  name            String         @unique
+  slug            String         @unique
+  description     String?
+  age             Int?           // Optional specific age milestone, e.g. 50
+  isMilestone     Boolean        @default(false)
+  metaTitle       String?
+  metaDescription String?
+  h1Title         String?
+  introText       String?
+  seoDescription  String?
+  isActive        Boolean        @default(true)
+  position        Int            @default(0)
 
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
+  products        PartyProduct[]
+}
+
+model PartyProduct {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  slug            String         @unique
+  description     String?
+  price           Float
+  priceInclVat    Float?
+  priceExclVat    Float?
+  vatRate         Float?         @default(0.21)
+  sku             String?
+  images          String[]       @default([]) // Multiple images supported
+  featuredImage   String?
+  inStock         Boolean        @default(true)
+  stockQuantity   Int?           @default(100)
+  ages            Int[]          @default([]) // Target birthday milestone ages, e.g. [50]
+  tags            String[]       @default([])
+  isUpsellOnly    Boolean        @default(false)
+  isActive        Boolean        @default(true)
+
+  metaTitle       String?
+  metaDescription String?
+  seoDescription  String?
+
+  categoryId      String?        @db.ObjectId
+  category        PartyCategory? @relation(fields: [categoryId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
+}
