@@ -73,6 +73,18 @@ const deleteCategory = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const reorderCategories = catchAsync(async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  const result = await partyCategoryService.reorderCategories(ids || []);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Volgorde succesvol aangepast",
+    data: result,
+  });
+});
+
 export const partyCategoryController = {
   createCategory,
   getAllCategories,
@@ -80,4 +92,5 @@ export const partyCategoryController = {
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
+  reorderCategories,
 };

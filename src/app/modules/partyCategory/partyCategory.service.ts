@@ -186,6 +186,17 @@ const deleteCategory = async (id: string) => {
   return null;
 };
 
+const reorderCategories = async (ids: string[]) => {
+  return prisma.$transaction(
+    ids.map((id, index) =>
+      prisma.partyCategory.update({
+        where: { id },
+        data: { position: index },
+      })
+    )
+  );
+};
+
 export const partyCategoryService = {
   createCategory,
   getAllCategories,
@@ -193,4 +204,6 @@ export const partyCategoryService = {
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
+  reorderCategories,
 };
+

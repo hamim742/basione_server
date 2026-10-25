@@ -15,6 +15,12 @@ router.post(
 );
 
 router.patch(
+  "/reorder",
+  checkAuth("admin"),
+  partyCategoryController.reorderCategories
+);
+
+router.patch(
   "/:id",
   checkAuth("admin"),
   validateRequest(partyCategoryValidation.updatePartyCategoryZodSchema),
