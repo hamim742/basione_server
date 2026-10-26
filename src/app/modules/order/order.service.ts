@@ -28,7 +28,8 @@ type FrontendDeliveryType =
   | "standard-pickup";
 
 interface CreateOrderPayloadItem {
-  bannerId: string;
+  bannerId?: string;
+  partyProductId?: string;
   quantity: number;
   hasEyelets?: boolean;
 }
@@ -305,16 +306,54 @@ const createOrder = async (
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const itemBannerId = item.bannerId;
     const itemQuantity = item.quantity;
     const itemHasEyelets = item.hasEyelets !== undefined ? item.hasEyelets : true;
 
-    if (!itemBannerId) {
-      throw new AppError("Banner-id is verplicht.", httpStatus.BAD_REQUEST);
-    }
-
     if (!itemQuantity || !Number.isInteger(itemQuantity) || itemQuantity < 1) {
       throw new AppError("Aantal moet minstens 1 zijn.", httpStatus.BAD_REQUEST);
+    }
+
+    // --- 1. Party Product Item Handling ---
+    if (item.partyProductId) {
+      const partyProduct = await prisma.partyProduct.findUnique({
+        where: { id: item.partyProductId },
+      });
+
+      if (!partyProduct) {
+        throw new AppError("Feestartikel niet gevonden.", httpStatus.NOT_FOUND);
+      }
+
+      if (!partyProduct.isActive) {
+        throw new AppError(`Feestartikel "${partyProduct.title}" is niet meer beschikbaar.`, httpStatus.BAD_REQUEST);
+      }
+
+      const unitPrice = Number(partyProduct.priceInclVat || partyProduct.price);
+      const productTotalPriceInclVat = roundToTwo(unitPrice * itemQuantity);
+      const productPriceExclVat = getPriceExcludingVatFromIncludedVat(productTotalPriceInclVat);
+      const productVatAmount = getVatAmountFromIncludedVat(productTotalPriceInclVat);
+
+      orderItemsData.push({
+        partyProductId: partyProduct.id,
+        quantity: itemQuantity,
+        hasEyelets: false,
+        eyeletsFee: 0,
+        price: unitPrice,
+        subtotal: productTotalPriceInclVat,
+        priceExcludingVat: productPriceExclVat,
+        vatAmount: productVatAmount,
+      });
+
+      totalBannerPriceExclVat += productPriceExclVat;
+      totalBannerVatAmount += productVatAmount;
+      totalBannerPriceInclVat += productTotalPriceInclVat;
+
+      continue;
+    }
+
+    // --- 2. Banner / Template Item Handling ---
+    const itemBannerId = item.bannerId;
+    if (!itemBannerId) {
+      throw new AppError("Product identificatie ontbreekt.", httpStatus.BAD_REQUEST);
     }
 
     const banner = await prisma.banner.findUnique({
@@ -545,7 +584,7 @@ const createOrder = async (
 
           userId: userId || null,
           isGuest: isGuestOrder,
-          bannerId: items[0].bannerId,
+          bannerId: items.find((it) => it.bannerId)?.bannerId || null,
           trackingNumber,
 
           // Only include guest token fields for actual guest orders.
@@ -745,14 +784,16 @@ const checkOut = async (
     throw new AppError("Ongeldig bestelbedrag", httpStatus.BAD_REQUEST);
   }
 
-  const banner = await prisma.banner.findUnique({
-    where: {
-      id: order.bannerId || undefined,
-    },
-  });
+  if (order.bannerId) {
+    const banner = await prisma.banner.findUnique({
+      where: {
+        id: order.bannerId,
+      },
+    });
 
-  if (!banner) {
-    throw new AppError("Banner niet gevonden", httpStatus.NOT_FOUND);
+    if (!banner) {
+      throw new AppError("Banner niet gevonden", httpStatus.NOT_FOUND);
+    }
   }
 
   await prisma.address.upsert({
@@ -868,6 +909,7 @@ const getMyOrders = async (
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
     },
@@ -983,6 +1025,7 @@ const getSingleOrder = async (orderId: string, userId: string) => {
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
     },
@@ -1009,6 +1052,7 @@ const getGuestOrder = async (orderId: string, token?: string) => {
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
     },
@@ -1040,6 +1084,7 @@ export const cancledOrder = async (orderId: string, reason?: string) => {
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
     },
@@ -1141,6 +1186,7 @@ const trackOrder = async (contactInfo: string) => {
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
       shipments: true,
@@ -1249,6 +1295,7 @@ const getAllCustomerOrders = async (
               imageUrl: true,
             },
           },
+          partyProduct: true,
         },
       },
     },
@@ -1344,10 +1391,12 @@ const getAllCustomerOrders = async (
           ? order.items.map((item: any) => ({
               id: item.id,
               bannerId: item.bannerId,
-              bannerName: item.banner?.name,
+              partyProductId: item.partyProductId,
+              productName: item.partyProduct?.title || item.banner?.name,
+              bannerName: item.banner?.name || item.partyProduct?.title,
               quantity: item.quantity,
-              price: item.banner?.price,
-              imageUrl: item.banner?.imageUrl,
+              price: item.price ?? (item.partyProduct?.priceInclVat || item.banner?.price),
+              imageUrl: item.partyProduct?.featuredImage || item.partyProduct?.images?.[0] || item.banner?.imageUrl,
             }))
           : order.banner
           ? [

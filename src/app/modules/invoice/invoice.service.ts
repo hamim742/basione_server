@@ -60,6 +60,7 @@ export const generateAndSaveInvoice = async ({
           items: {
             include: {
               banner: true,
+              partyProduct: true,
             },
           },
         },
@@ -131,6 +132,18 @@ export const generateAndSaveInvoice = async ({
 
       items: order.items && order.items.length > 0
         ? order.items.map((item: any, i: number) => {
+            if (item.partyProduct) {
+              return {
+                name: item.partyProduct.title || "Feestartikel",
+                quantity: Number(item.quantity || 1),
+                unitPrice: Number(item.price ?? (item.partyProduct.priceInclVat || item.partyProduct.price || 0)),
+                designType: "Feestartikel",
+                designFileName: null,
+                designNumber: item.partyProduct.sku || "-",
+                designReference: item.partyProduct.sku || item.partyProductId || item.id,
+                size: null,
+              };
+            }
             const itemDesignNumber =
               item.banner?.designNumber ||
               (i === 0

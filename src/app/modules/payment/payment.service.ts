@@ -626,6 +626,7 @@ const paymentPaid = async (
       items: {
         include: {
           banner: true,
+          partyProduct: true,
         },
       },
     },
@@ -764,10 +765,12 @@ const paymentPaid = async (
 
     items: (updatedOrder as any).items && (updatedOrder as any).items.length > 0
       ? (updatedOrder as any).items.map((item: any) => ({
-          name: `${formatLabel(item.banner?.occasion || "custom") || "Custom"} Banner`,
+          name: item.partyProduct?.title
+            ? item.partyProduct.title
+            : `${formatLabel(item.banner?.occasion || "custom") || "Custom"} Banner`,
           quantity: Number(item.quantity || 1),
-          price: Number(item.banner?.price || item.price || 0),
-          imageUrl: item.banner?.imageUrl || "",
+          price: Number(item.partyProduct?.priceInclVat || item.partyProduct?.price || item.banner?.price || item.price || 0),
+          imageUrl: item.partyProduct?.featuredImage || item.partyProduct?.images?.[0] || item.banner?.imageUrl || "",
         }))
       : [
           {
