@@ -638,8 +638,10 @@ model CartItem {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   userId     String   @db.ObjectId
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bannerId   String   @db.ObjectId
-  banner     Banner   @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+  bannerId   String?  @db.ObjectId
+  banner     Banner?  @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+  partyProductId String? @db.ObjectId
+  partyProduct   PartyProduct? @relation(fields: [partyProductId], references: [id], onDelete: Cascade)
   quantity   Int      @default(1)
   hasEyelets Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -647,14 +649,17 @@ model CartItem {
 
   @@index([userId])
   @@index([bannerId])
+  @@index([partyProductId])
 }
 
 model OrderItem {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   orderId    String   @db.ObjectId
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  bannerId   String   @db.ObjectId
-  banner     Banner   @relation(fields: [bannerId], references: [id])
+  bannerId   String?  @db.ObjectId
+  banner     Banner?  @relation(fields: [bannerId], references: [id])
+  partyProductId String? @db.ObjectId
+  partyProduct   PartyProduct? @relation(fields: [partyProductId], references: [id])
   quantity   Int
   hasEyelets Boolean  @default(false)
   eyeletsFee Float    @default(0)
@@ -667,6 +672,7 @@ model OrderItem {
 
   @@index([orderId])
   @@index([bannerId])
+  @@index([partyProductId])
 }
 
 model AlertBarSetting {
@@ -812,6 +818,9 @@ model PartyProduct {
 
   categoryId      String?        @db.ObjectId
   category        PartyCategory? @relation(fields: [categoryId], references: [id])
+
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

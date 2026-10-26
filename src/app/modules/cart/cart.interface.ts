@@ -1,5 +1,6 @@
 export interface ICartItemPayload {
-  bannerId: string;
+  bannerId?: string;
+  partyProductId?: string;
   quantity: number;
   hasEyelets?: boolean;
 }

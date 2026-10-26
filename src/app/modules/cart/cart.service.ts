@@ -10,6 +10,7 @@ const getCart = async (userId: string) => {
     },
     include: {
       banner: true,
+      partyProduct: true,
     },
     orderBy: {
       createdAt: "desc",
@@ -19,7 +20,63 @@ const getCart = async (userId: string) => {
 };
 
 const addToCart = async (userId: string, payload: ICartItemPayload) => {
-  const { bannerId, quantity, hasEyelets = false } = payload;
+  const { bannerId, partyProductId, quantity, hasEyelets = false } = payload;
+
+  // 1. Handle Party Product
+  if (partyProductId) {
+    const partyProduct = await prisma.partyProduct.findUnique({
+      where: { id: partyProductId },
+    });
+
+    if (!partyProduct) {
+      throw new AppError("Feestartikel niet gevonden.", httpStatus.NOT_FOUND);
+    }
+
+    if (!partyProduct.isActive) {
+      throw new AppError("Dit feestartikel is momenteel niet beschikbaar.", httpStatus.BAD_REQUEST);
+    }
+
+    const existingItem = await prisma.cartItem.findFirst({
+      where: {
+        userId,
+        partyProductId,
+      },
+    });
+
+    if (existingItem) {
+      const updatedItem = await prisma.cartItem.update({
+        where: { id: existingItem.id },
+        data: {
+          quantity: existingItem.quantity + quantity,
+        },
+        include: {
+          banner: true,
+          partyProduct: true,
+        },
+      });
+      return updatedItem;
+    }
+
+    const newItem = await prisma.cartItem.create({
+      data: {
+        userId,
+        partyProductId,
+        quantity,
+        hasEyelets: false,
+      },
+      include: {
+        banner: true,
+        partyProduct: true,
+      },
+    });
+
+    return newItem;
+  }
+
+  // 2. Handle Banner Template / Design
+  if (!bannerId) {
+    throw new AppError("Product identificatie ontbreekt.", httpStatus.BAD_REQUEST);
+  }
 
   const banner = await prisma.banner.findUnique({
     where: { id: bannerId },
@@ -51,6 +108,7 @@ const addToCart = async (userId: string, payload: ICartItemPayload) => {
       },
       include: {
         banner: true,
+        partyProduct: true,
       },
     });
     return updatedItem;
@@ -65,6 +123,7 @@ const addToCart = async (userId: string, payload: ICartItemPayload) => {
     },
     include: {
       banner: true,
+      partyProduct: true,
     },
   });
 
@@ -141,49 +200,80 @@ const syncCart = async (userId: string, payload: ISyncCartPayload) => {
 
   let count = 0;
   for (const item of items) {
-    const { bannerId, quantity, hasEyelets = false } = item;
+    const { bannerId, partyProductId, quantity, hasEyelets = false } = item;
     
-    // verify banner exists
-    const banner = await prisma.banner.findUnique({
-      where: { id: bannerId }
-    });
-    
-    if (!banner) continue;
-
-    // associate banner with user if it has no user assigned yet
-    if (!banner.userId) {
-      await prisma.banner.update({
-        where: { id: bannerId },
-        data: { userId }
+    // Handle party product sync
+    if (partyProductId) {
+      const partyProduct = await prisma.partyProduct.findUnique({
+        where: { id: partyProductId },
       });
+      if (!partyProduct || !partyProduct.isActive) continue;
+
+      const existingItem = await prisma.cartItem.findFirst({
+        where: { userId, partyProductId },
+      });
+
+      if (existingItem) {
+        await prisma.cartItem.update({
+          where: { id: existingItem.id },
+          data: { quantity: existingItem.quantity + quantity },
+        });
+      } else {
+        await prisma.cartItem.create({
+          data: {
+            userId,
+            partyProductId,
+            quantity,
+            hasEyelets: false,
+          },
+        });
+      }
+      count++;
+      continue;
     }
 
-    const existingItem = await prisma.cartItem.findFirst({
-      where: {
-        userId,
-        bannerId,
-      },
-    });
-
-    if (existingItem) {
-      await prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: {
-          quantity: existingItem.quantity + quantity,
-          hasEyelets: hasEyelets || existingItem.hasEyelets,
-        },
+    // Handle banner sync
+    if (bannerId) {
+      const banner = await prisma.banner.findUnique({
+        where: { id: bannerId },
       });
-    } else {
-      await prisma.cartItem.create({
-        data: {
+      
+      if (!banner) continue;
+
+      if (!banner.userId) {
+        await prisma.banner.update({
+          where: { id: bannerId },
+          data: { userId },
+        });
+      }
+
+      const existingItem = await prisma.cartItem.findFirst({
+        where: {
           userId,
           bannerId,
-          quantity,
-          hasEyelets,
         },
       });
+
+      if (existingItem) {
+        await prisma.cartItem.update({
+          where: { id: existingItem.id },
+          data: {
+            quantity: existingItem.quantity + quantity,
+            hasEyelets: hasEyelets || existingItem.hasEyelets,
+          },
+        });
+      } else {
+        await prisma.cartItem.create({
+          data: {
+            userId,
+            bannerId,
+            quantity,
+            hasEyelets,
+          },
+        });
+      }
+      count++;
     }
-    count++;
   }
 
   return { success: true, count };
