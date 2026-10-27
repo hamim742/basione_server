@@ -17,9 +17,10 @@ const createCategory = catchAsync(async (req: Request, res: Response) => {
 
 const getAllCategories = catchAsync(async (req: Request, res: Response) => {
   const isActive = req.query.isActive !== undefined ? req.query.isActive === "true" : undefined;
+  const hasActiveProducts = req.query.hasActiveProducts !== undefined ? req.query.hasActiveProducts === "true" : undefined;
   const search = req.query.search as string | undefined;
 
-  const result = await partyCategoryService.getAllCategories({ isActive, search });
+  const result = await partyCategoryService.getAllCategories({ isActive, search, hasActiveProducts });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

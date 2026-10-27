@@ -155,12 +155,15 @@ const getAllProducts = async (filters: {
 
 const getUpsellProducts = async (query: { age?: number; categoryId?: string; limit?: number }) => {
   const limit = Number(query.limit) || 6;
-  const parsedAge = query.age !== undefined ? Number(query.age) : undefined;
+  const parsedAge = query.age !== undefined && !isNaN(Number(query.age)) ? Number(query.age) : undefined;
 
   let matchedProducts: any[] = [];
 
-  // 1. First priority: match by specific age if age is provided
-  if (parsedAge && !isNaN(parsedAge)) {
+  // 1. If an age IS provided (e.g. 16, 50):
+  // STRICT RULE: Only show products matching this exact age, or universal products (empty ages array).
+  // Under NO circumstances show products tagged with other ages (e.g. no 50-year items on a 16-year banner).
+  if (parsedAge) {
+    // 1a. Age-specific products
     matchedProducts = await prisma.partyProduct.findMany({
       where: {
         isActive: true,
@@ -171,41 +174,59 @@ const getUpsellProducts = async (query: { age?: number; categoryId?: string; lim
       orderBy: { createdAt: "desc" },
       include: { category: true },
     });
+
+    // 1b. Universal products only (where ages array is empty, e.g. balloon handpump, generic bunting)
+    if (matchedProducts.length < limit) {
+      const existingIds = matchedProducts.map((p) => p.id);
+      const universalProducts = await prisma.partyProduct.findMany({
+        where: {
+          isActive: true,
+          inStock: true,
+          id: { notIn: existingIds },
+          ages: { isEmpty: true },
+        },
+        take: limit - matchedProducts.length,
+        orderBy: { createdAt: "desc" },
+        include: { category: true },
+      });
+
+      matchedProducts = [...matchedProducts, ...universalProducts];
+    }
+
+    return matchedProducts;
   }
 
-  // 2. Second priority: if not enough products, match by categoryId if provided
-  if (matchedProducts.length < limit && query.categoryId) {
-    const existingIds = matchedProducts.map((p) => p.id);
+  // 2. If NO age was provided (general/universal banners):
+  if (query.categoryId) {
     const categoryProducts = await prisma.partyProduct.findMany({
       where: {
         isActive: true,
         inStock: true,
         categoryId: query.categoryId,
-        id: { notIn: existingIds },
       },
-      take: limit - matchedProducts.length,
+      take: limit,
       orderBy: { createdAt: "desc" },
       include: { category: true },
     });
 
-    matchedProducts = [...matchedProducts, ...categoryProducts];
+    matchedProducts = categoryProducts;
   }
 
-  // 3. Fallback: if still under limit, fill with general active party products
   if (matchedProducts.length < limit) {
     const existingIds = matchedProducts.map((p) => p.id);
-    const fallbackProducts = await prisma.partyProduct.findMany({
+    const generalProducts = await prisma.partyProduct.findMany({
       where: {
         isActive: true,
         inStock: true,
         id: { notIn: existingIds },
+        ages: { isEmpty: true },
       },
       take: limit - matchedProducts.length,
       orderBy: { createdAt: "desc" },
       include: { category: true },
     });
 
-    matchedProducts = [...matchedProducts, ...fallbackProducts];
+    matchedProducts = [...matchedProducts, ...generalProducts];
   }
 
   return matchedProducts;

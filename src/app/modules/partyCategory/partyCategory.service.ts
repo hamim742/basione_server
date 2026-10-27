@@ -57,11 +57,19 @@ const createCategory = async (payload: any) => {
   return category;
 };
 
-const getAllCategories = async (query?: { isActive?: boolean; search?: string }) => {
+const getAllCategories = async (query?: { isActive?: boolean; search?: string; hasActiveProducts?: boolean }) => {
   const where: any = {};
 
   if (query?.isActive !== undefined) {
     where.isActive = query.isActive;
+  }
+
+  if (query?.hasActiveProducts) {
+    where.products = {
+      some: {
+        isActive: true,
+      },
+    };
   }
 
   if (query?.search) {
