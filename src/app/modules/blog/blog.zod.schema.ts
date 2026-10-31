@@ -39,8 +39,30 @@ const publishExternalBlogZodSchema = z.object({
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional().default("PUBLISHED"),
 });
 
+const updateExternalBlogZodSchema = z.object({
+  id: z.string().optional(),
+  slug: z.string().optional(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  category: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  pdf: z.string().optional(),
+  pdfUrl: z.string().optional(),
+  youtubeVideoUrl: z.string().optional(),
+  youtubeShortUrl: z.string().optional(),
+  mainImage: z.string().optional(),
+  coverImage: z.string().optional(),
+  infographic: z.string().optional(),
+  infographicUrl: z.string().optional(),
+  status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  isFeatured: z.boolean().optional(),
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
+}).passthrough();
+
 export const blogValidation = {
   createBlogZodSchema,
   updateBlogZodSchema,
   publishExternalBlogZodSchema,
+  updateExternalBlogZodSchema,
 };

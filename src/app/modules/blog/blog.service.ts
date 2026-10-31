@@ -396,6 +396,85 @@ const publishExternalBlog = async (data: any, authorId: string) => {
   return blog;
 };
 
+// Update blog post from external systems (handles PUT, Base64 or URL asset uploads)
+const updateExternalBlog = async (identifier: string, data: any) => {
+  if (!identifier) {
+    throw new AppError("Blog identifier (id or slug) is required", httpStatus.BAD_REQUEST);
+  }
+
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+  const existingBlog = await prisma.blog.findFirst({
+    where: isObjectId
+      ? { OR: [{ id: identifier }, { slug: identifier }] }
+      : { slug: identifier },
+  });
+
+  if (!existingBlog) {
+    throw new AppError("Blog post not found", httpStatus.NOT_FOUND);
+  }
+
+  const {
+    pdf,
+    pdfUrl: inputPdfUrl,
+    mainImage,
+    coverImage: inputCoverImage,
+    infographic,
+    infographicUrl: inputInfographicUrl,
+    id: _bodyId,
+    slug: _bodySlug,
+    ...rest
+  } = data;
+
+  const updateData: any = { ...rest };
+
+  // Handle PDF: accept either pdf or pdfUrl
+  const rawPdf = pdf !== undefined ? pdf : inputPdfUrl;
+  if (rawPdf !== undefined) {
+    updateData.pdfUrl = rawPdf ? await uploadBase64OrUrl(rawPdf, "pdfs", "application/pdf") : null;
+  }
+
+  // Handle Cover / Main Image: accept either mainImage or coverImage
+  const rawMainImage = mainImage !== undefined ? mainImage : inputCoverImage;
+  if (rawMainImage !== undefined) {
+    updateData.coverImage = rawMainImage ? await uploadBase64OrUrl(rawMainImage, "images", "image/jpeg") : null;
+  }
+
+  // Handle Infographic: accept either infographic or infographicUrl
+  const rawInfographic = infographic !== undefined ? infographic : inputInfographicUrl;
+  if (rawInfographic !== undefined) {
+    updateData.infographicUrl = rawInfographic ? await uploadBase64OrUrl(rawInfographic, "images", "image/jpeg") : null;
+  }
+
+  // If title is updated and different, regenerate unique slug
+  if (rest.title && rest.title !== existingBlog.title) {
+    updateData.slug = await generateUniqueSlug(rest.title, existingBlog.id);
+  }
+
+  // Handle status updates and publishedAt timestamps
+  if (rest.status === BlogStatus.PUBLISHED && existingBlog.status !== BlogStatus.PUBLISHED) {
+    updateData.publishedAt = new Date();
+  } else if (rest.status && rest.status !== BlogStatus.PUBLISHED) {
+    updateData.publishedAt = null;
+  }
+
+  const blog = await prisma.blog.update({
+    where: { id: existingBlog.id },
+    data: updateData,
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+    },
+  });
+
+  return blog;
+};
+
 export const blogService = {
   createBlog,
   updateBlog,
@@ -406,4 +485,5 @@ export const blogService = {
   getPublicBlogs,
   getCategoriesAndTags,
   publishExternalBlog,
+  updateExternalBlog,
 };

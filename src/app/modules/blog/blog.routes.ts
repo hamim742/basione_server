@@ -26,6 +26,35 @@ router.post(
   blogController.publishExternalBlog,
 );
 
+// Update a blog post from an external source (handles base64 files and URLs, PUT method)
+router.put(
+  "/publish-external/:id",
+  checkBlogPublishAuth(),
+  validateRequest(blogValidation.updateExternalBlogZodSchema),
+  blogController.updateExternalBlog,
+);
+
+router.put(
+  "/publish-external",
+  checkBlogPublishAuth(),
+  validateRequest(blogValidation.updateExternalBlogZodSchema),
+  blogController.updateExternalBlog,
+);
+
+router.put(
+  "/update-external/:id",
+  checkBlogPublishAuth(),
+  validateRequest(blogValidation.updateExternalBlogZodSchema),
+  blogController.updateExternalBlog,
+);
+
+router.put(
+  "/update-external",
+  checkBlogPublishAuth(),
+  validateRequest(blogValidation.updateExternalBlogZodSchema),
+  blogController.updateExternalBlog,
+);
+
 // Upload a cover or content image independently (returns image URL)
 router.post(
   "/upload-image",
@@ -41,6 +70,15 @@ router.patch(
   upload.single("coverImage"),
   validateRequest(blogValidation.updateBlogZodSchema),
   blogController.updateBlog,
+);
+
+// Update an existing blog post via PUT (supports API Key and Admin Token, Base64/URL/Multipart)
+router.put(
+  "/:id",
+  checkBlogPublishAuth(),
+  upload.single("coverImage"),
+  validateRequest(blogValidation.updateExternalBlogZodSchema),
+  blogController.updateExternalBlog,
 );
 
 // Delete a blog post

@@ -186,6 +186,38 @@ const publishExternalBlog = catchAsync(async (req: Request & { user?: any }, res
   });
 });
 
+// Update blog post from external systems (via API Key or Admin Token)
+const updateExternalBlog = catchAsync(async (req: Request, res: Response) => {
+  const file = req.file;
+  if (file) {
+    const coverImageUrl = await uploadOptimizedImageToS3(file, "images", 1600, 1600, 80);
+    req.body.coverImage = coverImageUrl;
+  }
+
+  const identifier = (req.params.id || req.body.id || req.body.slug) as string;
+  if (!identifier) {
+    throw new AppError(
+      "Blog identifier (id or slug) must be provided in URL parameter or body",
+      httpStatus.BAD_REQUEST,
+    );
+  }
+
+  const result = await blogService.updateExternalBlog(identifier, req.body);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Blog post updated successfully",
+    data: {
+      id: result.id,
+      slug: result.slug,
+      title: result.title,
+      pdfUrl: result.pdfUrl,
+      status: result.status,
+    },
+  });
+});
+
 export const blogController = {
   createBlog,
   updateBlog,
@@ -197,4 +229,5 @@ export const blogController = {
   getPublicBlogs,
   getCategoriesAndTags,
   publishExternalBlog,
+  updateExternalBlog,
 };
