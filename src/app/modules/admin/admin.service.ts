@@ -787,12 +787,6 @@ const getUserSavedDesigns = async (
       createdAt: true,
       updatedAt: true,
       addresses: true,
-      _count: {
-        select: {
-          orders: true,
-          banners: true,
-        },
-      },
     },
   });
 
@@ -800,14 +794,49 @@ const getUserSavedDesigns = async (
     throw new AppError("Gebruiker niet gevonden", httpStatus.NOT_FOUND);
   }
 
+  // Find all orders placed by this user (both registered userId and guest checkout with same email)
+  const userOrders = await prisma.order.findMany({
+    where: {
+      OR: [
+        { userId: user.id },
+        { guestEmail: { equals: user.email, mode: "insensitive" } },
+        { addresses: { email: { equals: user.email, mode: "insensitive" } } },
+      ],
+    },
+    select: {
+      id: true,
+      trackingNumber: true,
+      status: true,
+      paymentStatus: true,
+      bannerId: true,
+      items: {
+        select: {
+          bannerId: true,
+        },
+      },
+    },
+  });
+
+  const totalOrdersCount = userOrders.length;
+  const orderMap = new Map<string, string>();
+  userOrders.forEach((o) => {
+    if (o.trackingNumber) {
+      orderMap.set(o.id, o.trackingNumber);
+    }
+  });
+
+  const orderBannerIds = userOrders
+    .flatMap((o) => [o.bannerId, ...o.items.map((i) => i.bannerId)])
+    .filter((id): id is string => Boolean(id));
+
   const skip = (page - 1) * limit;
 
+  // Include designs saved with userId or linked to user's orders
   const where: any = {
-    userId,
     isTemplate: false,
     OR: [
-      { isSavedDesign: true },
-      { savedFromEditor: true },
+      { userId: user.id },
+      ...(orderBannerIds.length > 0 ? [{ id: { in: orderBannerIds } }] : []),
     ],
   };
 
@@ -818,6 +847,7 @@ const getUserSavedDesigns = async (
         id: true,
         designNumber: true,
         imageUrl: true,
+        originalImageUrl: true,
         mockupUrl: true,
         mockupFirstUrl: true,
         mockupPartyUrl: true,
@@ -853,9 +883,24 @@ const getUserSavedDesigns = async (
     prisma.banner.count({ where }),
   ]);
 
+  const enrichedDesigns = designs.map((d) => {
+    const trackingNumber = d.orderId ? orderMap.get(d.orderId) : null;
+    return {
+      ...d,
+      trackingNumber: trackingNumber || null,
+      isOrdered: Boolean(d.isOrdered || d.orderId),
+    };
+  });
+
   return {
-    user,
-    designs,
+    user: {
+      ...user,
+      _count: {
+        orders: totalOrdersCount,
+        banners: total,
+      },
+    },
+    designs: enrichedDesigns,
     metaData: {
       total,
       page,
