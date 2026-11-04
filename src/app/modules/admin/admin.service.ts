@@ -769,6 +769,102 @@ const updateUserStatus = async (
   return user;
 };
 
+const getUserSavedDesigns = async (
+  userId: string,
+  page: number = 1,
+  limit: number = 20,
+) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      status: true,
+      phone: true,
+      role: true,
+      image: true,
+      createdAt: true,
+      updatedAt: true,
+      addresses: true,
+      _count: {
+        select: {
+          orders: true,
+          banners: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new AppError("Gebruiker niet gevonden", httpStatus.NOT_FOUND);
+  }
+
+  const skip = (page - 1) * limit;
+
+  const where: any = {
+    userId,
+    isTemplate: false,
+    OR: [
+      { isSavedDesign: true },
+      { savedFromEditor: true },
+    ],
+  };
+
+  const [designs, total] = await prisma.$transaction([
+    prisma.banner.findMany({
+      where,
+      select: {
+        id: true,
+        designNumber: true,
+        imageUrl: true,
+        mockupUrl: true,
+        mockupFirstUrl: true,
+        mockupPartyUrl: true,
+        mockupGardenUrl: true,
+        headline: true,
+        name: true,
+        occasion: true,
+        price: true,
+        width: true,
+        height: true,
+        sizeType: true,
+        sizeLabel: true,
+        source: true,
+        savedFromEditor: true,
+        isSavedDesign: true,
+        isOrdered: true,
+        designStatus: true,
+        lifecycleStatus: true,
+        orderedAt: true,
+        orderId: true,
+        canvasJSON: true,
+        eyeletType: true,
+        material: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      skip,
+      take: limit,
+    }),
+    prisma.banner.count({ where }),
+  ]);
+
+  return {
+    user,
+    designs,
+    metaData: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
 const dashboardStats = async (
   range?: string,
   startDate?: string,
@@ -3125,4 +3221,5 @@ export const adminService = {
   createBackgroundImage,
   deleteBackgroundImage,
   getAllBackgroundImages,
+  getUserSavedDesigns,
 };

@@ -106,6 +106,26 @@ const updateUserStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getUserSavedDesigns = catchAsync(async (req: Request, res: Response) => {
+  const { page, limit } = calculatePagination(req.query);
+  const result = await adminService.getUserSavedDesigns(
+    req.params.id as string,
+    page,
+    limit,
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Opgeslagen ontwerpen van gebruiker succesvol opgehaald",
+    data: {
+      user: result.user,
+      designs: result.designs,
+    },
+    metaData: result.metaData,
+  });
+});
+
 const dashboardStats = catchAsync(async (req: Request, res: Response) => {
   const range = req.query.range as string | undefined;
   const startDate = req.query.startDate as string | undefined;
@@ -619,6 +639,7 @@ export const adminController = {
   manageOrder,
   manageUsers,
   updateUserStatus,
+  getUserSavedDesigns,
   dashboardStats,
   totalTransaction,
   createDecoration,

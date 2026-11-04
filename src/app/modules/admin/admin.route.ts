@@ -15,6 +15,8 @@ router.patch("/update-order/:id", adminController.manageOrder);
 
 router.get("/total-users", adminController.manageUsers);
 router.patch("/update-user/:id", adminController.updateUserStatus);
+router.get("/users/:id/saved-designs", checkAuth("admin"), adminController.getUserSavedDesigns);
+router.get("/user-saved-designs/:id", checkAuth("admin"), adminController.getUserSavedDesigns);
 
 router.get("/dashboard-stats", adminController.dashboardStats);
 router.get("/total-transaction", adminController.totalTransaction);
