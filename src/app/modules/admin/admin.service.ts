@@ -1951,6 +1951,14 @@ const createTemplateCategory = async (data: {
 
 const getAllTemplateCategories = async () => {
   const categories = await prisma.templateCategory.findMany({
+    include: {
+      subcategories: {
+        orderBy: [
+          { position: "asc" },
+          { createdAt: "desc" },
+        ],
+      },
+    },
     orderBy: [
       { position: "asc" },
       { createdAt: "desc" },

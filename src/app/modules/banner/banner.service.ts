@@ -1538,6 +1538,17 @@ const getTemplateCategories = async () => {
     where: {
       isActive: true,
     },
+    include: {
+      subcategories: {
+        where: {
+          isActive: true,
+        },
+        orderBy: [
+          { position: "asc" },
+          { createdAt: "desc" },
+        ],
+      },
+    },
     orderBy: [
       { position: "asc" },
       { createdAt: "desc" },
